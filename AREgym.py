@@ -26,7 +26,7 @@ import utils
 '''
 
 class AREEnv(gym.Env):
-    def __init__(self, grid, step_distance):
+    def __init__(self, grid, step_distance, save_map=False):
         self.observation_size = 72
         self.world_size = grid # how large to generate the square map, in pixels
         self.step_distance = step_distance # how far the robot moves at each time step, in pixels
@@ -57,11 +57,43 @@ class AREEnv(gym.Env):
         # episode termination criteria param
         self.termination_threshhold = 0.9 ## also magic number
 
+        self.save_map = save_map
+        if self.save_map:
+            '''
+            global: show global map
+            world: show world map, not including robot, can use used for verifying world generation
+            default: global map with robot and laserscan
+
+            [Blue Green Red]
+            unexplored: grey [128, 128, 128]
+            obstacle: black [0, 0, 0]
+            free: white [255, 255, 255]
+            laser: pink [255, 0, 255]
+            robot: teal [255, 255, 0]
+            path: blue [255, 255, 0]
+            '''
+            
+            # shows global map and path taken so far
+            self.map_img = np.zeros((self.world_size * 2, self.world_size * 2, 3))
+        
+            # image of generated map, doesnt change 
+            self.world_img = np.ones((self.world_size, self.world_size, 3))
+            for i in range(self.world_size):
+                for j in range(self.world_size):
+                    self.world_img[i,j,0] = 0 if self.world.world[i,j] == 0 else 1
+                    self.world_img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
+                    self.world_img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
+
+            # shows world map with Robot and curent laserscan and path taken
+            self.current_img = np.zeros((self.world_size, self.world_size, 3))
+            for i in range(self.world_size):
+                for j in range(self.world_size):
+                    self.current_img[i,j,0] = 0 if self.world.world[i,j] == 0 else 1
+                    self.current_img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
+                    self.current_img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
+
         # keeping track of stuff for rendering 
-        self.scan = [] # store values scanned pixels for rendering
-        self.total_steps = []
-        self.initial_x = self.x
-        self.initial_y = self.y
+            self.scan = [] # store values scanned pixels for rendering
 
     def reset(self):
         self.world = self.world_generator.new_world(self.world_size)
@@ -86,8 +118,9 @@ class AREEnv(gym.Env):
             self.move(step[0], step[1])
             self.get_laser_scan()
 
-            # keep track for render
-            self.total_steps.append(step)
+            if self.save_map:
+                self.map_img[self.x, self.y, 0] = 1
+
         return self.observe(), self.get_reward(), self.finished()
     
     def move(self, dx, dy):
@@ -105,7 +138,8 @@ class AREEnv(gym.Env):
         return observation
 
     def get_laser_scan(self):
-        self.scan.clear()
+        if self.save_map:
+            self.scan.clear()
 
         for i in range(self.num_laser_scan):
             distance = 1
@@ -133,7 +167,8 @@ class AREEnv(gym.Env):
                 self.world.explore(dx, dy)
 
                 # for rendering
-                self.scan.append([dx,dy])
+                if self.save_map:
+                    self.scan.append([dx,dy])
                 distance += 1
             self.laserscan[i] = distance # in pixels
             
@@ -164,61 +199,29 @@ class AREEnv(gym.Env):
     def finished(self):
         return self.world.explore_progress() >= self.termination_threshhold
 
-    '''
-    IDK HOW WELL THIS RENDERING WORKS, JUST USING FOR CHECKING NOW
+    def render(self, image_path=""):
+        
+        if not self.save_map:
+            return
+        
+        for i in range(self.world_size * 2):
+            for j in range(self.world_size * 2):
+                if (self.map_img[i,j] == np.array([1 ,0, 0])).all():
+                    continue
+                self.map_img[i,j,0] = 0 if self.global_map[i,j] == 0 else 1 if self.global_map[i,j] == 1 else 0.5
+                self.map_img[i,j,1] = 0 if self.global_map[i,j] == 0 else 1 if self.global_map[i,j] == 1 else 0.5
+                self.map_img[i,j,2] = 0 if self.global_map[i,j] == 0 else 1 if self.global_map[i,j] == 1 else 0.5
+        image1 = cv2.rotate(self.map_img, cv2.ROTATE_180)
+        image1 = (image1 * 255).astype(np.uint8)
+        cv2.imwrite(image_path + "/global_map.png", image1)
 
-    global: show global map
-    world: show world map, not including robot, can use used for verifying world generation
-    default: global map with robot and laserscan
+        image2 = cv2.rotate(self.world_img, cv2.ROTATE_180)
+        image2 = (image2 * 255).astype(np.uint8)
+        cv2.imwrite(image_path + "/world_map.png", image2)
 
-    [Blue Green Red]
-    unexplored: grey [128, 128, 128]
-    obstacle: black [0, 0, 0]
-    free: white [255, 255, 255]
-    laser: pink [255, 0, 255]
-    robot: teal [255, 255, 0]
-    path: blue [255, 255, 0]
-    '''
-    def render(self, key = ""):
-        if key == "global":
-            img = np.zeros((self.world_size * 2, self.world_size * 2, 3))
-            for i in range(self.world_size * 2):
-                for j in range(self.world_size * 2):
-                    img[i,j,0] = 0 if self.global_map[i,j] == 0 else 1 if self.global_map[i,j] == 1 else 0.5
-                    img[i,j,1] = 0 if self.global_map[i,j] == 0 else 1 if self.global_map[i,j] == 1 else 0.5
-                    img[i,j,2] = 0 if self.global_map[i,j] == 0 else 1 if self.global_map[i,j] == 1 else 0.5
-
-            x, y = self.initial_x, self.initial_y
-            for steps in self.total_steps:
-                img[x, y, 1] = 0
-                img[x, y, 2] = 0
-                x += steps[0]
-                y += steps[1]
-
-
-        elif key == "world":
-            img = np.zeros((self.world_size, self.world_size, 3))
-            for i in range(self.world_size):
-                for j in range(self.world_size):
-                    img[i,j,0] = 0 if self.world.world[i,j] == 0 else 1
-                    img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
-                    img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
-        else:
-            img = np.zeros((self.world_size, self.world_size, 3))
-            for i in range(self.world_size):
-                for j in range(self.world_size):
-                    img[i,j,0] = 0 if self.world.world[i,j] == 0 else 1
-                    img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
-                    img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
-            img[self.world.x, self.world.y, 2] = 0
-            print(self.world.x)
-            print(self.world.y)
-            for i in range(len(self.scan)):
-                img[self.world.x + self.scan[i][0], self.world.y + self.scan[i][1], 1] = 0
-            
-        ## to align with numpy
-        # x is down 
-        # y is right
-        image = cv2.rotate(img, cv2.ROTATE_180)
-        cv2.imshow("image", image)
-        cv2.waitKey()
+        self.current_img[self.world.x, self.world.y, 2] = 0
+        for i in range(len(self.scan)):
+            self.current_img[self.world.x + self.scan[i][0], self.world.y + self.scan[i][1], 1] = 0
+        image3 = cv2.rotate(self.current_img, cv2.ROTATE_180)
+        image3 = (image3 * 255).astype(np.uint8)
+        cv2.imwrite(image_path + "/current_state.png", image3)

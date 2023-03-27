@@ -51,16 +51,39 @@ class World:
         return self.explored_area.sum() / self.free_area
 
 class WorldGenerator:
-    def __init__(self):
-        return
+    def __init__(self, size_x, size_y, fill = 0.5):
+        self.size_x = size_x # x size of world
+        self.size_y = size_y # y size of world
+        self.fill = fill # percentage [0,1] of world that is filled with room
 
-    def new_world(self, grid):
+    def new_world(self):
         '''
         Generate random world and randomly place robot in world
         '''
-        world = np.zeros((grid,grid))
+        world = np.zeros((self.size_x, self.size_y))
 
-        for i in range(125,375):
-            world[i][125:375] = 1
+        room_area = self.fill * self.size_x * self.size_y / 10
+        room_size = int(math.sqrt(room_area))
+        
+        for i in range(10):
+            while True:
+                # choose a random point that can generate a room of room_area
+                start = np.random.randint(1,[self.size_x-room_size, self.size_y-room_size])
+                if i == 0 or self.canGenRoom(world,room_size,start[0],start[1]):
+                    self.floodRoom(world,room_size,start[0],start[1])
+                    break
+        while True:
+            robot_start = np.random.randint(0,[self.size_x, self.size_y])
+            if world[robot_start[0],robot_start[1]] == 1:
+                break
+        return World(world, robot_start[0], robot_start[1])
+    
+    def canGenRoom(self, world, room_size, room_x, room_y):
+        return not world[room_x:room_x+room_size,room_y:room_y+room_size].any() and (\
+            (room_y>0 and world[room_x:room_x+room_size,room_y-1].any()) or \
+            (room_y+room_size<self.size_y-1 and world[room_x:room_x+room_size,room_y+room_size+1].any()) or \
+            (room_x>0 and world[room_x-1,room_y:room_y+room_size].any()) or \
+            (room_x+room_size<self.size_x-1 and world[room_x+room_size+1,room_y:room_y+room_size].any()))
 
-        return World(world, 250, 250)
+    def floodRoom(self, world, room_size, room_x, room_y):
+        world[room_x:room_x+room_size,room_y:room_y+room_size] = 1

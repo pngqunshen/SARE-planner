@@ -26,13 +26,13 @@ import utils
 '''
 
 class AREEnv(gym.Env):
-    def __init__(self, grid, step_distance, save_map=False):
-        self.observation_size = 72
+    def __init__(self, grid, step_distance, save_map=False, laser_scan_max_dist=50, \
+                 num_laser_scan=36, heuristic_dist=80, termination_threshhold=0.9):
         self.world_size = grid # how large to generate the square map, in pixels
         self.step_distance = step_distance # how far the robot moves at each time step, in pixels
 
-        self.world_generator = World.WorldGenerator()
-        self.world = self.world_generator.new_world(self.world_size)
+        self.world_generator = World.WorldGenerator(self.world_size, self.world_size)
+        self.world = self.world_generator.new_world()
         
         # initialize all unexplored areas as -1
         self.global_map = np.zeros((2 * grid, 2 * grid)) - 1
@@ -42,26 +42,28 @@ class AREEnv(gym.Env):
         self.y = grid 
 
         # initialize lidar
-        self.laser_scan_max_dist = 50 # in pixels
-        self.num_laser_scan = int(self.observation_size // 2)
-        self.num_laser_scan = 36
+        self.laser_scan_max_dist = laser_scan_max_dist # in pixels
+        self.num_laser_scan = num_laser_scan
         self.laserscan = np.zeros(self.num_laser_scan)
         # self.laser_scan_heading = np.array([0])
-        self.laser_scan_heading = np.array([((0.5 - (i / self.num_laser_scan)) * math.pi * 2) for i in range(self.num_laser_scan)])
+        self.laser_scan_heading = \
+            np.array([((0.5 - (i / self.num_laser_scan)) * math.pi * 2) \
+                      for i in range(self.num_laser_scan)])
 
 
         # initialize heuristics and heuristics params
         self.heuristic = np.zeros((self.num_laser_scan))
-        self.heuristic_dist = self.step_distance * 2 # magic number 
+        self.heuristic_dist = heuristic_dist # self.step_distance * 2 magic number 
 
         # episode termination criteria param
-        self.termination_threshhold = 0.9 ## also magic number
+        self.termination_threshhold = termination_threshhold ## also magic number
 
         self.save_map = save_map
         if self.save_map:
             '''
             global: show global map
-            world: show world map, not including robot, can use used for verifying world generation
+            world: show world map, not including robot, can use used for 
+            verifying world generation
             default: global map with robot and laserscan
 
             [Blue Green Red]
@@ -96,7 +98,7 @@ class AREEnv(gym.Env):
             self.scan = [] # store values scanned pixels for rendering
 
     def reset(self):
-        self.world = self.world_generator.new_world(self.world_size)
+        self.world = self.world_generator.new_world()
         self.x = self.world_size
         self.y = self.world_size
 
@@ -154,7 +156,9 @@ class AREEnv(gym.Env):
 
                 dx = int(math.cos(heading) * distance)
                 dy = int(math.sin(heading) * distance)
-                if not utils.out_of_bounds(self.world.x + dx, self.world.y + dy, self.world.size):
+                if not utils.out_of_bounds(self.world.x + dx, \
+                                           self.world.y + dy, \
+                                            self.world.size):
                     break
 
                 if self.world.world[self.world.x + dx, self.world.y + dy] == 0:
@@ -208,9 +212,21 @@ class AREEnv(gym.Env):
             for j in range(self.world_size * 2):
                 if (self.map_img[i,j] == np.array([1 ,0, 0])).all():
                     continue
-                self.map_img[i,j,0] = 0 if self.global_map[i,j] == 0 else 1 if self.global_map[i,j] == 1 else 0.5
-                self.map_img[i,j,1] = 0 if self.global_map[i,j] == 0 else 1 if self.global_map[i,j] == 1 else 0.5
-                self.map_img[i,j,2] = 0 if self.global_map[i,j] == 0 else 1 if self.global_map[i,j] == 1 else 0.5
+                self.map_img[i,j,0] = 0 \
+                    if self.global_map[i,j] == 0 \
+                    else 1 \
+                        if self.global_map[i,j] == 1 \
+                        else 0.5
+                self.map_img[i,j,1] = 0 \
+                    if self.global_map[i,j] == 0 \
+                    else 1 \
+                        if self.global_map[i,j] == 1 \
+                        else 0.5
+                self.map_img[i,j,2] = 0 \
+                    if self.global_map[i,j] == 0 \
+                    else 1 \
+                        if self.global_map[i,j] == 1 \
+                        else 0.5
         image1 = cv2.rotate(self.map_img, cv2.ROTATE_180)
         image1 = (image1 * 255).astype(np.uint8)
         cv2.imwrite(image_path + "/global_map.png", image1)
@@ -221,7 +237,8 @@ class AREEnv(gym.Env):
 
         self.current_img[self.world.x, self.world.y, 2] = 0
         for i in range(len(self.scan)):
-            self.current_img[self.world.x + self.scan[i][0], self.world.y + self.scan[i][1], 1] = 0
+            self.current_img[self.world.x + self.scan[i][0], \
+                             self.world.y + self.scan[i][1], 1] = 0
         image3 = cv2.rotate(self.current_img, cv2.ROTATE_180)
         image3 = (image3 * 255).astype(np.uint8)
         cv2.imwrite(image_path + "/current_state.png", image3)

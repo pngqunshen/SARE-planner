@@ -30,7 +30,7 @@ class World:
             dx = int(math.cos(heading) * distance)
             dy = int(math.sin(heading) * distance)
             # check out of bounds
-            if not utils.out_of_bounds(self.x + dx, self.y + dy, self.size):
+            if utils.out_of_bounds(self.x + dx, self.y + dy, self.size, self.size):
                 break
             if self.world[self.x + dx, self.y + dy] == 0:
                 break        
@@ -81,9 +81,9 @@ class WorldGenerator:
     def can_gen_room(self, world, room_size, room_x, room_y):
         return not world[room_x:room_x+room_size,room_y:room_y+room_size].any() and (\
             (room_y>0 and world[room_x:room_x+room_size,room_y-1].any()) or \
-            (room_y+room_size<self.size_y-1 and world[room_x:room_x+room_size,room_y+room_size+1].any()) or \
+            (room_y+room_size<self.size_y-1 and world[room_x:room_x+room_size,room_y+room_size].any()) or \
             (room_x>0 and world[room_x-1,room_y:room_y+room_size].any()) or \
-            (room_x+room_size<self.size_x-1 and world[room_x+room_size+1,room_y:room_y+room_size].any()))
+            (room_x+room_size<self.size_x-1 and world[room_x+room_size,room_y:room_y+room_size].any()))
 
     def flood_room(self, world, room_size, room_x, room_y):
         world[room_x:room_x+room_size,room_y:room_y+room_size] = 1

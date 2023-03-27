@@ -55,15 +55,16 @@ class AREEnv(gym.Env):
         self.heuristic = np.zeros((self.num_laser_scan))
         self.heuristic_dist = heuristic_dist # self.step_distance * 2 magic number 
 
+        # initialize reward 
+        self.reward_prev = 0
+        self.reward_after = 0
+
         # episode termination criteria param
         self.termination_threshhold = termination_threshhold ## also magic number
 
         self.save_map = save_map
         if self.save_map:
             self.save_map_mode()
-
-        # keeping track of stuff for rendering 
-            self.scan = [] # store values scanned pixels for rendering
     
     def save_map_mode(self):
         '''
@@ -100,6 +101,9 @@ class AREEnv(gym.Env):
                 self.current_img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
                 self.current_img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
 
+        # keeping track of stuff for rendering 
+        self.scan = [] # store values scanned pixels for rendering
+
     def reset(self):
         self.world = self.world_generator.new_world()
         self.x = self.world_size
@@ -118,6 +122,8 @@ class AREEnv(gym.Env):
         heading = utils.action_to_rad(action)
         
         steps = self.world.get_path(heading, self.step_distance)
+        
+        self.reward_prev = self.world.explore_progress()
 
         for step in steps:
             self.move(step[0], step[1])
@@ -125,6 +131,8 @@ class AREEnv(gym.Env):
 
             if self.save_map:
                 self.map_img[self.x, self.y, 0] = 1
+        
+        self.reward_after = self.world.explore_progress()
 
         return self.observe(), self.get_reward(), self.finished()
     
@@ -147,37 +155,15 @@ class AREEnv(gym.Env):
             self.scan.clear()
 
         for i in range(self.num_laser_scan):
-            distance = 1
-            dx = 0
-            dy = 0
-            # ensure that current state is explored, only used when called during reset
-            self.global_map[self.x + dx, self.y + dy] = 1
-
             heading = self.laser_scan_heading[i]
-            while distance < self.laser_scan_max_dist:
-                # move in direction until hit an obstacle or reach maximum distance
-
-                dx = int(math.cos(heading) * distance)
-                dy = int(math.sin(heading) * distance)
-                if not utils.out_of_bounds(self.world.x + dx, \
-                                           self.world.y + dy, \
-                                            self.world.size):
-                    break
-
-                if self.world.world[self.world.x + dx, self.world.y + dy] == 0:
-                    self.global_map[self.x + dx, self.y + dy] = 0
-                    break
-                # update robot's map
+            def update_func(dx, dy):
                 self.global_map[self.x + dx, self.y + dy] = 1
-
-                # update world, used for calculation of termination
                 self.world.explore(dx, dy)
-
-                # for rendering
                 if self.save_map:
                     self.scan.append([dx,dy])
-                distance += 1
-            self.laserscan[i] = distance # in pixels
+            x1, y1 = utils.bresenham_line(lambda dx, dy: update_func(dx, dy), self.x, self.y, \
+                                          self.laser_scan_max_dist, heading, self.world.size, self.world.size)
+            self.laserscan[i] = utils.euc_dist(self.x,x1,self.y,y1) # in pixels
             
     def calc_heuristics(self):
         for i in range(self.num_laser_scan):
@@ -201,7 +187,25 @@ class AREEnv(gym.Env):
         ██║░╚███║╚█████╔╝   ╚█████╔╝███████╗╚██████╔╝███████╗
         ╚═╝░░╚══╝░╚════╝░   ░╚════╝░╚══════╝░╚═════╝░╚══════╝
         '''
-        return 1
+        # Calculate the delta of exploration progress before and after the action
+        delta_reward = self.reward_after - self.reward_prev
+
+        '''        
+        ██╗  ████████╗██╗░░██╗██╗███╗░░██╗██╗░░██╗  ██╗████████╗██╗░██████╗
+        ██║  ╚══██╔══╝██║░░██║██║████╗░██║██║░██╔╝  ██║╚══██╔══╝╚█║██╔════╝
+        ██║  ░░░██║░░░███████║██║██╔██╗██║█████═╝░  ██║░░░██║░░░░╚╝╚█████╗░
+        ██║  ░░░██║░░░██╔══██║██║██║╚████║██╔═██╗░  ██║░░░██║░░░░░░░╚═══██╗
+        ██║  ░░░██║░░░██║░░██║██║██║░╚███║██║░╚██╗  ██║░░░██║░░░░░░██████╔╝
+        ╚═╝  ░░░╚═╝░░░╚═╝░░╚═╝╚═╝╚═╝░░╚══╝╚═╝░░╚═╝  ╚═╝░░░╚═╝░░░░░░╚═════╝░
+
+        ██████╗░░█████╗░███╗░░██╗███████╗
+        ██╔══██╗██╔══██╗████╗░██║██╔════╝
+        ██║░░██║██║░░██║██╔██╗██║█████╗░░
+        ██║░░██║██║░░██║██║╚████║██╔══╝░░
+        ██████╔╝╚█████╔╝██║░╚███║███████╗
+        ╚═════╝░░╚════╝░╚═╝░░╚══╝╚══════╝
+        '''
+        return delta_reward
 
     def finished(self):
         return self.world.explore_progress() >= self.termination_threshhold

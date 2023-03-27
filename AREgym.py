@@ -47,7 +47,7 @@ class AREEnv(gym.Env):
         self.laserscan = np.zeros(self.num_laser_scan)
         # self.laser_scan_heading = np.array([0])
         self.laser_scan_heading = \
-            np.array([((0.5 - (i / self.num_laser_scan)) * math.pi * 2) \
+            np.array([(utils.action_to_rad(i / self.num_laser_scan)) \
                       for i in range(self.num_laser_scan)])
 
 
@@ -60,42 +60,45 @@ class AREEnv(gym.Env):
 
         self.save_map = save_map
         if self.save_map:
-            '''
-            global: show global map
-            world: show world map, not including robot, can use used for 
-            verifying world generation
-            default: global map with robot and laserscan
-
-            [Blue Green Red]
-            unexplored: grey [128, 128, 128]
-            obstacle: black [0, 0, 0]
-            free: white [255, 255, 255]
-            laser: pink [255, 0, 255]
-            robot: teal [255, 255, 0]
-            path: blue [255, 255, 0]
-            '''
-            
-            # shows global map and path taken so far
-            self.map_img = np.zeros((self.world_size * 2, self.world_size * 2, 3))
-        
-            # image of generated map, doesnt change 
-            self.world_img = np.ones((self.world_size, self.world_size, 3))
-            for i in range(self.world_size):
-                for j in range(self.world_size):
-                    self.world_img[i,j,0] = 0 if self.world.world[i,j] == 0 else 1
-                    self.world_img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
-                    self.world_img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
-
-            # shows world map with Robot and curent laserscan and path taken
-            self.current_img = np.zeros((self.world_size, self.world_size, 3))
-            for i in range(self.world_size):
-                for j in range(self.world_size):
-                    self.current_img[i,j,0] = 0 if self.world.world[i,j] == 0 else 1
-                    self.current_img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
-                    self.current_img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
+            self.save_map_mode()
 
         # keeping track of stuff for rendering 
             self.scan = [] # store values scanned pixels for rendering
+    
+    def save_map_mode(self):
+        '''
+        global: show global map
+        world: show world map, not including robot, can use used for 
+        verifying world generation
+        default: global map with robot and laserscan
+
+        [Blue Green Red]
+        unexplored: grey [128, 128, 128]
+        obstacle: black [0, 0, 0]
+        free: white [255, 255, 255]
+        laser: pink [255, 0, 255]
+        robot: teal [255, 255, 0]
+        path: blue [255, 255, 0]
+        '''
+        
+        # shows global map and path taken so far
+        self.map_img = np.zeros((self.world_size * 2, self.world_size * 2, 3))
+    
+        # image of generated map, doesnt change 
+        self.world_img = np.ones((self.world_size, self.world_size, 3))
+        for i in range(self.world_size):
+            for j in range(self.world_size):
+                self.world_img[i,j,0] = 0 if self.world.world[i,j] == 0 else 1
+                self.world_img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
+                self.world_img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
+
+        # shows world map with Robot and curent laserscan and path taken
+        self.current_img = np.zeros((self.world_size, self.world_size, 3))
+        for i in range(self.world_size):
+            for j in range(self.world_size):
+                self.current_img[i,j,0] = 0 if self.world.world[i,j] == 0 else 1
+                self.current_img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
+                self.current_img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
 
     def reset(self):
         self.world = self.world_generator.new_world()
@@ -112,7 +115,7 @@ class AREEnv(gym.Env):
 
     def step(self, action):
         # scale action between -pi and pi
-        heading = (action - 0.5) * math.pi * 2
+        heading = utils.action_to_rad(action)
         
         steps = self.world.get_path(heading, self.step_distance)
 
@@ -148,7 +151,7 @@ class AREEnv(gym.Env):
             dx = 0
             dy = 0
             # ensure that current state is explored, only used when called during reset
-            self.global_map[self.x + dx, self.y +dy] = 1
+            self.global_map[self.x + dx, self.y + dy] = 1
 
             heading = self.laser_scan_heading[i]
             while distance < self.laser_scan_max_dist:
@@ -162,10 +165,10 @@ class AREEnv(gym.Env):
                     break
 
                 if self.world.world[self.world.x + dx, self.world.y + dy] == 0:
-                    self.global_map[self.x + dx, self.y +dy] = 0
+                    self.global_map[self.x + dx, self.y + dy] = 0
                     break
                 # update robot's map
-                self.global_map[self.x + dx, self.y +dy] = 1
+                self.global_map[self.x + dx, self.y + dy] = 1
 
                 # update world, used for calculation of termination
                 self.world.explore(dx, dy)

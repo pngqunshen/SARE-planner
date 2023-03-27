@@ -69,8 +69,8 @@ class WorldGenerator:
             while True:
                 # choose a random point that can generate a room of room_area
                 start = np.random.randint(1,[self.size_x-room_size, self.size_y-room_size])
-                if i == 0 or self.canGenRoom(world,room_size,start[0],start[1]):
-                    self.floodRoom(world,room_size,start[0],start[1])
+                if i == 0 or self.can_gen_room(world,room_size,start[0],start[1]):
+                    self.flood_room(world,room_size,start[0],start[1])
                     break
         while True:
             robot_start = np.random.randint(0,[self.size_x, self.size_y])
@@ -78,12 +78,12 @@ class WorldGenerator:
                 break
         return World(world, robot_start[0], robot_start[1])
     
-    def canGenRoom(self, world, room_size, room_x, room_y):
+    def can_gen_room(self, world, room_size, room_x, room_y):
         return not world[room_x:room_x+room_size,room_y:room_y+room_size].any() and (\
             (room_y>0 and world[room_x:room_x+room_size,room_y-1].any()) or \
             (room_y+room_size<self.size_y-1 and world[room_x:room_x+room_size,room_y+room_size+1].any()) or \
             (room_x>0 and world[room_x-1,room_y:room_y+room_size].any()) or \
             (room_x+room_size<self.size_x-1 and world[room_x+room_size+1,room_y:room_y+room_size].any()))
 
-    def floodRoom(self, world, room_size, room_x, room_y):
+    def flood_room(self, world, room_size, room_x, room_y):
         world[room_x:room_x+room_size,room_y:room_y+room_size] = 1

@@ -67,9 +67,10 @@ class WorldGenerator:
         
         for i in range(10):
             while True:
+                min_adjacent_px = 20
                 # choose a random point that can generate a room of room_area
                 start = np.random.randint(1,[self.size_x-room_size, self.size_y-room_size])
-                if i == 0 or self.can_gen_room(world,room_size,start[0],start[1]):
+                if i == 0 or self.can_gen_room(world,room_size,start[0],start[1],min_adjacent_px):
                     self.flood_room(world,room_size,start[0],start[1])
                     break
         while True:
@@ -78,11 +79,11 @@ class WorldGenerator:
                 break
         return World(world, robot_start[0], robot_start[1])
     
-    def can_gen_room(self, world, room_size, room_x, room_y):
+    def can_gen_room(self, world, room_size, room_x, room_y,min_adjacent_px=1): # at least 1 connecting px to adjacent room
         return not world[room_x:room_x+room_size,room_y:room_y+room_size].any() and (\
-            (room_y>0 and world[room_x:room_x+room_size,room_y-1].any()) or \
+            (room_y>0 and world[room_x:room_x+room_size,room_y-1].sum()>min_adjacent_px) or \
             (room_y+room_size<self.size_y-1 and world[room_x:room_x+room_size,room_y+room_size+1].any()) or \
-            (room_x>0 and world[room_x-1,room_y:room_y+room_size].any()) or \
+            (room_x>0 and world[room_x-1,room_y:room_y+room_size].sum()>min_adjacent_px) or \
             (room_x+room_size<self.size_x-1 and world[room_x+room_size+1,room_y:room_y+room_size].any()))
 
     def flood_room(self, world, room_size, room_x, room_y):

@@ -55,6 +55,10 @@ class AREEnv(gym.Env):
         self.heuristic = np.zeros((self.num_laser_scan))
         self.heuristic_dist = heuristic_dist # self.step_distance * 2 magic number 
 
+        # initialize reward 
+        self.reward_prev = 0
+        self.reward_after = 0
+
         # episode termination criteria param
         self.termination_threshhold = termination_threshhold ## also magic number
 
@@ -118,6 +122,8 @@ class AREEnv(gym.Env):
         heading = utils.action_to_rad(action)
         
         steps = self.world.get_path(heading, self.step_distance)
+        
+        self.reward_prev = self.world.explore_progress()
 
         for step in steps:
             self.move(step[0], step[1])
@@ -125,6 +131,8 @@ class AREEnv(gym.Env):
 
             if self.save_map:
                 self.map_img[self.x, self.y, 0] = 1
+        
+        self.reward_after = self.world.explore_progress()
 
         return self.observe(), self.get_reward(), self.finished()
     
@@ -201,7 +209,25 @@ class AREEnv(gym.Env):
         ██║░╚███║╚█████╔╝   ╚█████╔╝███████╗╚██████╔╝███████╗
         ╚═╝░░╚══╝░╚════╝░   ░╚════╝░╚══════╝░╚═════╝░╚══════╝
         '''
-        return 1
+        # Calculate the delta of exploration progress before and after the action
+        delta_reward = self.reward_after - self.reward_prev
+
+        '''        
+        ██╗  ████████╗██╗░░██╗██╗███╗░░██╗██╗░░██╗  ██╗████████╗██╗░██████╗
+        ██║  ╚══██╔══╝██║░░██║██║████╗░██║██║░██╔╝  ██║╚══██╔══╝╚█║██╔════╝
+        ██║  ░░░██║░░░███████║██║██╔██╗██║█████═╝░  ██║░░░██║░░░░╚╝╚█████╗░
+        ██║  ░░░██║░░░██╔══██║██║██║╚████║██╔═██╗░  ██║░░░██║░░░░░░░╚═══██╗
+        ██║  ░░░██║░░░██║░░██║██║██║░╚███║██║░╚██╗  ██║░░░██║░░░░░░██████╔╝
+        ╚═╝  ░░░╚═╝░░░╚═╝░░╚═╝╚═╝╚═╝░░╚══╝╚═╝░░╚═╝  ╚═╝░░░╚═╝░░░░░░╚═════╝░
+
+        ██████╗░░█████╗░███╗░░██╗███████╗
+        ██╔══██╗██╔══██╗████╗░██║██╔════╝
+        ██║░░██║██║░░██║██╔██╗██║█████╗░░
+        ██║░░██║██║░░██║██║╚████║██╔══╝░░
+        ██████╔╝╚█████╔╝██║░╚███║███████╗
+        ╚═════╝░░╚════╝░╚═╝░░╚══╝╚══════╝
+        '''
+        return delta_reward
 
     def finished(self):
         return self.world.explore_progress() >= self.termination_threshhold

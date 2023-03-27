@@ -50,17 +50,70 @@ class World:
     def explore_progress(self):
         return self.explored_area.sum() / self.free_area
 
+# class WorldGenerator:
+#     def __init__(self):
+#         return
+
+#     def new_world(self, grid):
+#         '''
+#         Generate random world and randomly place robot in world
+#         '''
+#         world = np.zeros((grid,grid))
+
+#         for i in range(125,375):
+#             world[i][125:375] = 1
+
+#         return World(world, 250, 250)
+
+
+# New world genreator to generate a maze
+import random
+
 class WorldGenerator:
     def __init__(self):
         return
 
     def new_world(self, grid):
         '''
-        Generate random world and randomly place robot in world
+        Generate random maze and randomly place robot in maze
         '''
-        world = np.zeros((grid,grid))
+        maze = np.ones((grid, grid), dtype=int)
+        maze[1:-1, 1:-1] = 0  # make inner area of the maze empty
 
-        for i in range(125,375):
-            world[i][125:375] = 1
+        # Recursive Backtracking algorithm to generate the maze
+        stack = [(2, 2)]
+        visited = set(stack)
 
-        return World(world, 250, 250)
+        while stack:
+            x, y = stack[-1]
+
+            # find neighbors
+            neighbors = [(x-2, y), (x+2, y), (x, y-2), (x, y+2)]
+            neighbors = [(nx, ny) for nx, ny in neighbors if nx > 0 and ny > 0 and nx < grid-1 and ny < grid-1]
+            neighbors = [(nx, ny) for nx, ny in neighbors if (nx, ny) not in visited]
+
+            if neighbors:
+                nx, ny = random.choice(neighbors)
+                # knock down the wall between the current cell and the chosen neighbor
+                if nx == x - 2:
+                    maze[nx+1, y] = 0
+                elif nx == x + 2:
+                    maze[nx-1, y] = 0
+                elif ny == y - 2:
+                    maze[x, ny+1] = 0
+                else:
+                    maze[x, ny-1] = 0
+
+                stack.append((nx, ny))
+                visited.add((nx, ny))
+            else:
+                stack.pop()
+
+        # randomly place robot in maze
+        robot_x, robot_y = random.choice(np.argwhere(maze == 0))
+        maze[robot_x, robot_y] = -1
+
+        return World(maze, robot_x, robot_y)
+
+
+World(maze, robot_x, robot_y)

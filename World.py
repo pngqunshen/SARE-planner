@@ -30,7 +30,7 @@ class World:
             dx = int(math.cos(heading) * distance)
             dy = int(math.sin(heading) * distance)
             # check out of bounds
-            if not utils.out_of_bounds(self.x + dx, self.y + dy, self.size):
+            if utils.out_of_bounds(self.x + dx, self.y + dy, self.size, self.size):
                 break
             if self.world[self.x + dx, self.y + dy] == 0:
                 break        

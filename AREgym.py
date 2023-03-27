@@ -65,9 +65,6 @@ class AREEnv(gym.Env):
         self.save_map = save_map
         if self.save_map:
             self.save_map_mode()
-
-        # keeping track of stuff for rendering 
-            self.scan = [] # store values scanned pixels for rendering
     
     def save_map_mode(self):
         '''
@@ -103,6 +100,9 @@ class AREEnv(gym.Env):
                 self.current_img[i,j,0] = 0 if self.world.world[i,j] == 0 else 1
                 self.current_img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
                 self.current_img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
+
+        # keeping track of stuff for rendering 
+        self.scan = [] # store values scanned pixels for rendering
 
     def reset(self):
         self.world = self.world_generator.new_world()
@@ -155,37 +155,15 @@ class AREEnv(gym.Env):
             self.scan.clear()
 
         for i in range(self.num_laser_scan):
-            distance = 1
-            dx = 0
-            dy = 0
-            # ensure that current state is explored, only used when called during reset
-            self.global_map[self.x + dx, self.y + dy] = 1
-
             heading = self.laser_scan_heading[i]
-            while distance < self.laser_scan_max_dist:
-                # move in direction until hit an obstacle or reach maximum distance
-
-                dx = int(math.cos(heading) * distance)
-                dy = int(math.sin(heading) * distance)
-                if not utils.out_of_bounds(self.world.x + dx, \
-                                           self.world.y + dy, \
-                                            self.world.size):
-                    break
-
-                if self.world.world[self.world.x + dx, self.world.y + dy] == 0:
-                    self.global_map[self.x + dx, self.y + dy] = 0
-                    break
-                # update robot's map
+            def update_func(dx, dy):
                 self.global_map[self.x + dx, self.y + dy] = 1
-
-                # update world, used for calculation of termination
                 self.world.explore(dx, dy)
-
-                # for rendering
                 if self.save_map:
                     self.scan.append([dx,dy])
-                distance += 1
-            self.laserscan[i] = distance # in pixels
+            x1, y1 = utils.bresenham_line(lambda dx, dy: update_func(dx, dy), self.x, self.y, \
+                                          self.laser_scan_max_dist, heading, self.world.size, self.world.size)
+            self.laserscan[i] = utils.euc_dist(self.x,x1,self.y,y1) # in pixels
             
     def calc_heuristics(self):
         for i in range(self.num_laser_scan):

@@ -4,7 +4,7 @@ import math
 returns true if out of bound of map
 '''
 def out_of_bounds(x, y, xl, yl):
-    return x < 0 and x >= xl and y < 0 and y >= yl
+    return x < 0 or x >= xl or y < 0 or y >= yl
 
 '''
 map action from [0,1] to [-pi,pi]

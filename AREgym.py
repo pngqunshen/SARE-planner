@@ -45,7 +45,6 @@ class AREEnv(gym.Env):
         self.laser_scan_max_dist = laser_scan_max_dist # in pixels
         self.num_laser_scan = num_laser_scan
         self.laserscan = np.zeros(self.num_laser_scan)
-        # self.laser_scan_heading = np.array([0])
         self.laser_scan_heading = \
             np.array([(utils.action_to_rad(i / self.num_laser_scan)) \
                       for i in range(self.num_laser_scan)])
@@ -108,12 +107,16 @@ class AREEnv(gym.Env):
         self.world = self.world_generator.new_world()
         self.x = self.world_size
         self.y = self.world_size
+        self.global_map = np.zeros((2 * self.world_size, 2 * self.world_size)) - 1
 
         # keeping track of stuff for rendering 
         self.scan = [] # store values scanned pixels for rendering
         self.total_steps = []
         self.initial_x = self.x
         self.initial_y = self.y
+
+        if self.save_map:
+            self.save_map_mode()
 
         return self.observe()
 
@@ -158,11 +161,20 @@ class AREEnv(gym.Env):
             heading = self.laser_scan_heading[i]
             def update_func(dx, dy):
                 self.global_map[self.x + dx, self.y + dy] = 1
+                if self.world.world[self.world.x + dx, self.world.y + dy] == 0:
+                    self.global_map[self.x + dx, self.y + dy] = 0
+                    return
                 self.world.explore(dx, dy)
                 if self.save_map:
                     self.scan.append([dx,dy])
-            x1, y1 = utils.bresenham_line(lambda dx, dy: update_func(dx, dy), self.x, self.y, \
-                                          self.laser_scan_max_dist, heading, self.world.size, self.world.size)
+            def term_cond(dx, dy):
+                return  utils.out_of_bounds(self.world.x + dx, self.world.y + dy, \
+                                            self.world.size, self.world.size) or \
+                        self.world.world[self.world.x + dx, self.world.y + dy] == 0
+            x1, y1 = utils.bresenham_line(lambda dx, dy: update_func(dx, dy), \
+                                          lambda dx, dy: term_cond(dx, dy), \
+                                          self.x, self.y, self.laser_scan_max_dist, \
+                                          heading)
             self.laserscan[i] = utils.euc_dist(self.x,x1,self.y,y1) # in pixels
             
     def calc_heuristics(self):

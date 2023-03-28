@@ -16,27 +16,29 @@ class World:
 
     def get_path(self, heading, max_distance):
         # this returns a list of steps to take in a form of [dx, dy] between each step
-        distance = 0
-        dx = 0
-        dy = 0
-
         steps = [[0,0]]
-        dx_prev = 0
-        dy_prev = 0
+        prev = [0,0]
+        def update_func(dx, dy):
+            steps.append([dx - prev[0], dy - prev[1]])
+            prev[0], prev[1] = dx, dy
+        def term_cond(dx, dy):
+            return utils.out_of_bounds(self.x + dx, self.y + dy, self.size, self.size) or \
+                self.world[self.x + dx, self.y + dy] == 0
+        utils.bresenham_line(update_func, term_cond, self.x, self.y, \
+                             max_distance, heading)
+        # while distance < max_distance:
+        #     # move in direction until hit an obstacle or reach maximum distance
 
-        while distance < max_distance:
-            # move in direction until hit an obstacle or reach maximum distance
-
-            dx = int(math.cos(heading) * distance)
-            dy = int(math.sin(heading) * distance)
-            # check out of bounds
-            if utils.out_of_bounds(self.x + dx, self.y + dy, self.size, self.size):
-                break
-            if self.world[self.x + dx, self.y + dy] == 0:
-                break        
-            steps.append([dx - dx_prev, dy - dy_prev])
-            dx_prev, dy_prev = dx, dy
-            distance += 1
+        #     dx = int(math.cos(heading) * distance)
+        #     dy = int(math.sin(heading) * distance)
+        #     # check out of bounds
+        #     if utils.out_of_bounds(self.x + dx, self.y + dy, self.size, self.size):
+        #         break
+        #     if self.world[self.x + dx, self.y + dy] == 0:
+        #         break        
+        #     steps.append([dx - dx_prev, dy - dy_prev])
+        #     dx_prev, dy_prev = dx, dy
+        #     distance += 1
 
         return steps
 
@@ -70,7 +72,7 @@ class WorldGenerator:
                 min_adjacent_px = 20
                 # choose a random point that can generate a room of room_area
                 start = np.random.randint(1,[self.size_x-room_size, self.size_y-room_size])
-                if i == 0 or self.can_gen_room(self,world,room_size,start[0],start[1],min_adjacent_px):
+                if i == 0 or self.can_gen_room(world,room_size,start[0],start[1],min_adjacent_px):
                     self.flood_room(world,room_size,start[0],start[1])
                     break
         while True:
@@ -79,12 +81,12 @@ class WorldGenerator:
                 break
         return World(world, robot_start[0], robot_start[1])
     
-    def can_gen_room(self, world, room_size, room_x, room_y,min_adjacent_px=1): # at least 1 connecting px to adjacent room
+    def can_gen_room(self, world, room_size, room_x, room_y, min_adjacent_px=1): # at least 1 connecting px to adjacent room
         return not world[room_x:room_x+room_size,room_y:room_y+room_size].any() and (\
             (room_y>0 and world[room_x:room_x+room_size,room_y-1].sum()>min_adjacent_px) or \
-            (room_y+room_size<self.size_y-1 and world[room_x:room_x+room_size,room_y+room_size+1].sum()>min_adjacent_px) or \
+            (room_y+room_size<self.size_y-1 and world[room_x:room_x+room_size,room_y+room_size].sum()>min_adjacent_px) or \
             (room_x>0 and world[room_x-1,room_y:room_y+room_size].sum()>min_adjacent_px) or \
-            (room_x+room_size<self.size_x-1 and world[room_x+room_size+1,room_y:room_y+room_size].sum()>min_adjacent_px))
+            (room_x+room_size<self.size_x-1 and world[room_x+room_size,room_y:room_y+room_size].sum()>min_adjacent_px))
 
     def flood_room(self, world, room_size, room_x, room_y):
         world[room_x:room_x+room_size,room_y:room_y+room_size] = 1

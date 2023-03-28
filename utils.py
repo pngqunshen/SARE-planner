@@ -7,7 +7,7 @@ def out_of_bounds(x, y, xl, yl):
 def action_to_rad(action):
     return (action - 0.5) * math.pi * 2
 
-def bresenham_line(update_func, x0, y0, d, heading, xl, yl):
+def bresenham_line(update_func, term_cond, x0, y0, d, heading):
     xs, ys = x0, y0
     x1 = int(x0 + d*math.cos(heading))
     y1 = int(y0 + d*math.sin(heading))
@@ -17,7 +17,7 @@ def bresenham_line(update_func, x0, y0, d, heading, xl, yl):
     sy = 1 if y0 < y1 else -1
     error = dx + dy
     while True:
-        if out_of_bounds(x0, y0, xl, yl):
+        if term_cond(x0 - xs, y0 - ys):
             break
         update_func(x0 - xs, y0 - ys)
         if x0 == x1 and y0 == y1:

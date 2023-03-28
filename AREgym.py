@@ -27,7 +27,7 @@ import utils
 
 class AREEnv(gym.Env):
     def __init__(self, grid, step_distance, save_map=False, laser_scan_max_dist=50, \
-                 num_laser_scan=36, heuristic_dist=80, termination_threshhold=0.9):
+                 num_laser_scan=36, heuristic_dist=50, termination_threshhold=0.9):
         self.world_size = grid # how large to generate the square map, in pixels
         self.step_distance = step_distance # how far the robot moves at each time step, in pixels
 
@@ -52,7 +52,7 @@ class AREEnv(gym.Env):
 
         # initialize heuristics and heuristics params
         self.heuristic = np.zeros((self.num_laser_scan))
-        self.heuristic_dist = heuristic_dist # self.step_distance * 2 magic number 
+        self.heuristic_dist = heuristic_dist
 
         # initialize reward 
         self.reward_prev = 0
@@ -103,6 +103,7 @@ class AREEnv(gym.Env):
         # keeping track of stuff for rendering 
         self.scan = [] # store values scanned pixels for rendering
 
+    # reset and generate a new world
     def reset(self):
         self.world = self.world_generator.new_world()
         self.x = self.world_size
@@ -119,11 +120,17 @@ class AREEnv(gym.Env):
             self.save_map_mode()
 
         return self.observe()
-
+    
+    '''
+    Take one step in action [0,1] direction
+    Updates rewards and map for rendering
+    Calls the move function to actually move the bot in global and world
+    '''
     def step(self, action):
         # scale action between -pi and pi
         heading = utils.action_to_rad(action)
-        
+
+        # may have to change step_distance to laser scan distance        
         steps = self.world.get_path(heading, self.step_distance)
         
         self.reward_prev = self.world.explore_progress()
@@ -137,8 +144,13 @@ class AREEnv(gym.Env):
         
         self.reward_after = self.world.explore_progress()
 
-        return self.observe(), self.get_reward(), self.finished()
+        # runnning slowly so i commented
+        # return self.observe(), self.get_reward(), self.finished()
     
+    '''
+    Move the bot in dx and dy direction in global map
+    Calls the move function in world to physically move the bot
+    '''
     def move(self, dx, dy):
         self.x += dx
         self.y += dy
@@ -152,13 +164,18 @@ class AREEnv(gym.Env):
         scaled_scan = self.laserscan / self.laser_scan_max_dist
         observation = np.concatenate((scaled_scan, self.heuristic))
         return observation
-
+    
+    '''
+    Take the laser scan at current point based on world map
+    Updates self.laserscan
+    '''
     def get_laser_scan(self):
         if self.save_map:
             self.scan.clear()
 
         for i in range(self.num_laser_scan):
             heading = self.laser_scan_heading[i]
+            # function to update in bresenham
             def update_func(dx, dy):
                 self.global_map[self.x + dx, self.y + dy] = 1
                 if self.world.world[self.world.x + dx, self.world.y + dy] == 0:
@@ -167,6 +184,7 @@ class AREEnv(gym.Env):
                 self.world.explore(dx, dy)
                 if self.save_map:
                     self.scan.append([dx,dy])
+            # terminating condition in bresenham
             def term_cond(dx, dy):
                 return  utils.out_of_bounds(self.world.x + dx, self.world.y + dy, \
                                             self.world.size, self.world.size) or \
@@ -176,19 +194,45 @@ class AREEnv(gym.Env):
                                           self.x, self.y, self.laser_scan_max_dist, \
                                           heading)
             self.laserscan[i] = utils.euc_dist(self.x,x1,self.y,y1) # in pixels
-            
-    def calc_heuristics(self):
-        for i in range(self.num_laser_scan):
-            '''
-            ███╗░░░███╗░█████╗░░██████╗░██╗░█████╗░
-            ████╗░████║██╔══██╗██╔════╝░██║██╔══██╗
-            ██╔████╔██║███████║██║░░██╗░██║██║░░╚═╝
-            ██║╚██╔╝██║██╔══██║██║░░╚██╗██║██║░░██╗
-            ██║░╚═╝░██║██║░░██║╚██████╔╝██║╚█████╔╝
-            ╚═╝░░░░░╚═╝╚═╝░░╚═╝░╚═════╝░╚═╝░╚════╝░
-            '''
 
-            self.heuristic[i] = 1
+    '''
+    Calculate heuristic
+    Do a laserscan from the current point to find the furthest possible point
+    Heuristic at each heading is the total total unexplored area from another
+    laser scan at that point (using heuristic distance), scaled to [0,1]
+    '''      
+    def calc_heuristics(self):
+        heu = np.zeros((self.num_laser_scan))
+        for i in range(self.num_laser_scan):
+            heading = self.laser_scan_heading[i]
+            def update_func(dx, dy):
+                pass
+            def term_cond(dx, dy):
+                return utils.out_of_bounds(self.x + dx, self.y + dy, \
+                                           self.world_size, self.world_size) or \
+                        self.global_map[self.x + dx, self.y + dy] != 1
+            x1, y1 = utils.bresenham_line(lambda dx, dy: update_func(dx, dy), \
+                                          lambda dx, dy: term_cond(dx, dy), \
+                                          self.x, self.y, self.laser_scan_max_dist, \
+                                          heading)
+            area_to_explore = 0
+            for j in range(self.num_laser_scan):
+                heading2 = self.laser_scan_heading[j]
+                can_explore = np.zeros((2 * self.world_size, 2 * self.world_size))
+                def update_func2(dx, dy):
+                    if self.global_map[x1 + dx, y1 + dy] == -1:
+                        can_explore[x1 + dx, y1 + dy] = 1
+                def term_cond2(dx, dy):
+                    return  utils.out_of_bounds(x1 + dx, y1 + dy, \
+                                                self.world_size, self.world_size) or \
+                            self.global_map[x1 + dx, y1 + dy] == 0
+                x2, y2 = utils.bresenham_line(lambda dx, dy: update_func2(dx, dy), \
+                                              lambda dx, dy: term_cond2(dx, dy), \
+                                              x1, y1, self.heuristic_dist, \
+                                              heading2)
+                area_to_explore += can_explore.sum()
+            heu[i] = area_to_explore
+        self.heuristic = heu/max(heu.max(),1)
         
     def get_reward(self):
         '''
@@ -221,7 +265,10 @@ class AREEnv(gym.Env):
 
     def finished(self):
         return self.world.explore_progress() >= self.termination_threshhold
-
+    
+    '''
+    Magical rendering function that spits out images
+    '''
     def render(self, image_path=""):
         
         if not self.save_map:

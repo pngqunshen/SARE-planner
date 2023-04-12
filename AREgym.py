@@ -145,7 +145,7 @@ class AREEnv(gym.Env):
         self.reward_after = self.world.explore_progress()
 
         # runnning slowly so i commented
-        # return self.observe(), self.get_reward(), self.finished()
+        return self.observe(), self.get_reward(), self.finished()
     
     '''
     Move the bot in dx and dy direction in global map

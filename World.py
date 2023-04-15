@@ -16,17 +16,24 @@ class World:
 
     def get_path(self, heading, max_distance):
         # this returns a list of steps to take in a form of [dx, dy] between each step
-        steps = [[0,0]]
-        prev = [0,0]
-        def update_func(dx, dy):
-            steps.append([dx - prev[0], dy - prev[1]])
-            prev[0], prev[1] = dx, dy
-        def term_cond(dx, dy):
-            return utils.out_of_bounds(self.x + dx, self.y + dy, self.size, self.size) or \
-                self.world[self.x + dx, self.y + dy] == 0
-        utils.bresenham_line(update_func, term_cond, self.x, self.y, \
-                             max_distance, heading)
-        return steps
+        laser_steps = np.arange(max_distance)
+        x_laser = np.cos(heading)
+        y_laser = np.sin(heading)
+        x_world = ((x_laser * laser_steps).astype(int) + self.x).clip(0,self.size-1)
+        y_world = ((y_laser * laser_steps).astype(int) + self.y).clip(0,self.size-1)
+        term = self.world[x_world, y_world] == 0 # true if  obstacle in real world
+        term1 = np.argmax(term, axis=0) # find first row that is true (first obstacle)
+        term2 = np.all(term == False, axis=0) # find rows without obstacles
+        if term2:
+            term1 = max_distance # rows without obstacles scan all the way
+        ind_free = (np.arange(max_distance) < term1)
+        path = np.hstack(((x_world-self.x)[ind_free].reshape(-1,1), (y_world-self.y)[ind_free].reshape(-1,1)))
+        path_new = np.zeros_like(path)
+        path_new[0] = path[0]
+        path_new[1:] = path[1:] - path[:-1]
+        # create a boolean mask that is True for all rows that do not contain [0, 0]
+        mask = np.any(path_new != [0, 0], axis=1)
+        return path_new[mask]
 
     def move(self, dx, dy):
         self.x += dx

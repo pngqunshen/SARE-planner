@@ -48,6 +48,15 @@ class AREEnv(gym.Env):
         self.laser_scan_heading = \
             np.array([(utils.action_to_rad(i / self.num_laser_scan)) \
                       for i in range(self.num_laser_scan)])
+        
+        # variables for laserscan
+        self.laser_steps = np.arange(self.laser_scan_max_dist)
+        self.x_laser = np.cos(self.laser_scan_heading)
+        self.y_laser = np.sin(self.laser_scan_heading)
+        self.x_laser_mat = np.matmul(self.laser_steps.reshape(self.laser_scan_max_dist,1), \
+                                     self.x_laser.reshape(1,self.num_laser_scan)).astype(int)
+        self.y_laser_mat = np.matmul(self.laser_steps.reshape(self.laser_scan_max_dist,1), \
+                                     self.y_laser.reshape(1,self.num_laser_scan)).astype(int)
 
 
         # initialize heuristics and heuristics params
@@ -144,7 +153,6 @@ class AREEnv(gym.Env):
         
         self.reward_after = self.world.explore_progress()
 
-        # runnning slowly so i commented
         return self.observe(), self.get_reward(), self.finished()
     
     '''
@@ -172,28 +180,24 @@ class AREEnv(gym.Env):
     def get_laser_scan(self):
         if self.save_map:
             self.scan.clear()
+    
+        x_global = (self.x_laser_mat + self.x).clip(0,self.world_size*2-1)
+        y_global = (self.y_laser_mat + self.y).clip(0,self.world_size*2-1)
+        x_world = (self.x_laser_mat + self.world.x).clip(0,self.world.size-1)
+        y_world = (self.y_laser_mat + self.world.y).clip(0,self.world.size-1)
+        term = self.world.world[x_world, y_world] == 0 # true if  obstacle in real world
+        term1 = np.argmax(term, axis=0) # find first row that is true (first obstacle)
+        term2 = np.all(term == False, axis=0) # find rows without obstacles
+        term1[term2] = self.laser_scan_max_dist # rows without obstacles scan all the way
+        ind_free = (np.arange(self.laser_scan_max_dist) < term1[:, np.newaxis]).transpose()
+        ind_obs = (np.arange(self.laser_scan_max_dist) == term1[:, np.newaxis]).transpose()
+        self.global_map[x_global[ind_free], y_global[ind_free]] = 1
+        self.global_map[x_global[ind_obs], y_global[ind_obs]] = 0
+        np.vectorize(self.world.explore)(self.x_laser_mat[ind_free], self.y_laser_mat[ind_free])
+        if self.save_map:
+            np.vectorize(lambda x,y: self.scan.append([x,y]))(self.x_laser_mat[ind_free], \
+                                                              self.y_laser_mat[ind_free])
 
-        for i in range(self.num_laser_scan):
-            heading = self.laser_scan_heading[i]
-            # function to update in bresenham
-            def update_func(dx, dy):
-                self.global_map[self.x + dx, self.y + dy] = 1
-                if self.world.world[self.world.x + dx, self.world.y + dy] == 0:
-                    self.global_map[self.x + dx, self.y + dy] = 0
-                    return
-                self.world.explore(dx, dy)
-                if self.save_map:
-                    self.scan.append([dx,dy])
-            # terminating condition in bresenham
-            def term_cond(dx, dy):
-                return  utils.out_of_bounds(self.world.x + dx, self.world.y + dy, \
-                                            self.world.size, self.world.size) or \
-                        self.world.world[self.world.x + dx, self.world.y + dy] == 0
-            x1, y1 = utils.bresenham_line(lambda dx, dy: update_func(dx, dy), \
-                                          lambda dx, dy: term_cond(dx, dy), \
-                                          self.x, self.y, self.laser_scan_max_dist, \
-                                          heading)
-            self.laserscan[i] = utils.euc_dist(self.x,x1,self.y,y1) # in pixels
 
     '''
     Calculate heuristic
@@ -202,36 +206,28 @@ class AREEnv(gym.Env):
     laser scan at that point (using heuristic distance), scaled to [0,1]
     '''      
     def calc_heuristics(self):
-        heu = np.zeros((self.num_laser_scan))
-        for i in range(self.num_laser_scan):
-            heading = self.laser_scan_heading[i]
-            def update_func(dx, dy):
-                pass
-            def term_cond(dx, dy):
-                return utils.out_of_bounds(self.x + dx, self.y + dy, \
-                                           self.world_size, self.world_size) or \
-                        self.global_map[self.x + dx, self.y + dy] != 1
-            x1, y1 = utils.bresenham_line(lambda dx, dy: update_func(dx, dy), \
-                                          lambda dx, dy: term_cond(dx, dy), \
-                                          self.x, self.y, self.laser_scan_max_dist, \
-                                          heading)
-            area_to_explore = 0
-            for j in range(self.num_laser_scan):
-                heading2 = self.laser_scan_heading[j]
-                can_explore = np.zeros((2 * self.world_size, 2 * self.world_size))
-                def update_func2(dx, dy):
-                    if self.global_map[x1 + dx, y1 + dy] == -1:
-                        can_explore[x1 + dx, y1 + dy] = 1
-                def term_cond2(dx, dy):
-                    return  utils.out_of_bounds(x1 + dx, y1 + dy, \
-                                                self.world_size, self.world_size) or \
-                            self.global_map[x1 + dx, y1 + dy] == 0
-                x2, y2 = utils.bresenham_line(lambda dx, dy: update_func2(dx, dy), \
-                                              lambda dx, dy: term_cond2(dx, dy), \
-                                              x1, y1, self.heuristic_dist, \
-                                              heading2)
-                area_to_explore += can_explore.sum()
-            heu[i] = area_to_explore
+        x_global = (self.x_laser_mat + self.x).clip(0,self.world_size*2-1)
+        y_global = (self.y_laser_mat + self.y).clip(0,self.world_size*2-1)
+        x_world = (self.x_laser_mat + self.world.x).clip(0,self.world.size-1)
+        y_world = (self.y_laser_mat + self.world.y).clip(0,self.world.size-1)
+        term = self.world.world[x_world, y_world] == 0 # true if  obstacle in real world
+        term1 = np.argmax(term, axis=0) # find first row that is true (first obstacle)
+        term2 = np.all(term == False, axis=0) # find rows without obstacles
+        term1[term2] = self.laser_scan_max_dist # rows without obstacles scan all the way
+        ind_last_point = (np.arange(self.laser_scan_max_dist) == term1[:, np.newaxis]-1).transpose()
+        points_to_explore_x = x_global[ind_last_point]
+        points_to_explore_y = y_global[ind_last_point]
+
+        x_global_explore = (self.x_laser_mat + points_to_explore_x[:, np.newaxis, np.newaxis]).clip(0,self.world_size*2-1)
+        y_global_explore = (self.y_laser_mat + points_to_explore_y[:, np.newaxis, np.newaxis]).clip(0,self.world_size*2-1)
+        term_explore = self.global_map[x_global_explore, y_global_explore] == 0 # true if obstacle in global world
+        term1_explore = np.argmax(term_explore, axis=1) # find first row that is true (first obstacle)
+        term2_explore = np.all(term_explore == False, axis=1) # find rows without obstacles
+        term1_explore[term2_explore] = self.laser_scan_max_dist # rows without obstacles scan all the way
+        ind_free_explore = (np.arange(self.laser_scan_max_dist) < term1_explore[:,:, np.newaxis]).transpose(0,2,1)
+        can_explore = self.global_map[x_global_explore,y_global_explore] == -1
+        can_explore[ind_free_explore==False] = False
+        heu = np.sum(can_explore, axis=(1,2))
         self.heuristic = heu/max(heu.max(),1)
         
     def get_reward(self):

@@ -27,7 +27,7 @@ import utils
 
 class AREEnv(gym.Env):
     def __init__(self, grid, step_distance, save_map=False, laser_scan_max_dist=50, \
-                 num_laser_scan=36, heuristic_dist=50, termination_threshhold=0.9):
+                 num_laser_scan=36, heuristic_dist=50, termination_threshhold=0.9, max_steps=1024):
         self.world_size = grid # how large to generate the square map, in pixels
         self.step_distance = step_distance # how far the robot moves at each time step, in pixels
 
@@ -73,6 +73,12 @@ class AREEnv(gym.Env):
         self.save_map = save_map
         if self.save_map:
             self.save_map_mode()
+
+        self.max_steps = max_steps
+        self.steps = 0
+
+        self.observation_space = gym.spaces.Box(low=0, high=self.laser_scan_max_dist, shape=(self.num_laser_scan * 2,))
+        self.action_space = gym.spaces.Box(low=-1, high=1, shape=(1,))
     
     def save_map_mode(self):
         '''
@@ -125,6 +131,8 @@ class AREEnv(gym.Env):
         self.initial_x = self.x
         self.initial_y = self.y
 
+        self.steps = 0
+
         if self.save_map:
             self.save_map_mode()
 
@@ -137,7 +145,7 @@ class AREEnv(gym.Env):
     '''
     def step(self, action):
         # scale action between -pi and pi
-        heading = utils.action_to_rad(action)
+        heading = action * math.pi
 
         # may have to change step_distance to laser scan distance        
         steps = self.world.get_path(heading, self.step_distance)
@@ -153,7 +161,17 @@ class AREEnv(gym.Env):
         
         self.reward_after = self.world.explore_progress()
 
-        return self.observe(), self.get_reward(), self.finished()
+        info = {}
+
+        self.steps += 1
+
+
+        obs = self.observe()
+        reward = self.get_reward()
+        done = bool(self.finished() or self.steps > self.max_steps)  # convert numpy.bool_ to bool cos np is weird?
+        return obs, reward, done, info
+
+        # return self.observe(), self.get_reward(), self.finished(), info
     
     '''
     Move the bot in dx and dy direction in global map
@@ -265,7 +283,7 @@ class AREEnv(gym.Env):
     '''
     Magical rendering function that spits out images
     '''
-    def render(self, image_path=""):
+    def render(self, image_path="images"):
         
         if not self.save_map:
             return

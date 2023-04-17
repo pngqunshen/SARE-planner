@@ -50,18 +50,23 @@ class AREEnv(gym.Env):
                       for i in range(self.num_laser_scan)])
         
         # variables for laserscan
-        self.laser_steps = np.arange(self.laser_scan_max_dist)
-        self.x_laser = np.cos(self.laser_scan_heading)
-        self.y_laser = np.sin(self.laser_scan_heading)
-        self.x_laser_mat = np.matmul(self.laser_steps.reshape(self.laser_scan_max_dist,1), \
-                                     self.x_laser.reshape(1,self.num_laser_scan)).astype(int)
-        self.y_laser_mat = np.matmul(self.laser_steps.reshape(self.laser_scan_max_dist,1), \
-                                     self.y_laser.reshape(1,self.num_laser_scan)).astype(int)
+        laser_steps = np.arange(self.laser_scan_max_dist)
+        x_laser = np.cos(self.laser_scan_heading)
+        y_laser = np.sin(self.laser_scan_heading)
+        self.x_laser_mat = np.matmul(laser_steps.reshape(self.laser_scan_max_dist,1), \
+                                     x_laser.reshape(1,self.num_laser_scan)).astype(int)
+        self.y_laser_mat = np.matmul(laser_steps.reshape(self.laser_scan_max_dist,1), \
+                                     y_laser.reshape(1,self.num_laser_scan)).astype(int)
 
 
         # initialize heuristics and heuristics params
         self.heuristic = np.zeros((self.num_laser_scan))
         self.heuristic_dist = heuristic_dist
+        heu_steps = np.arange(self.heuristic_dist)
+        self.x_heu_mat = np.matmul(heu_steps.reshape(self.heuristic_dist,1), \
+                                     x_laser.reshape(1,self.num_laser_scan)).astype(int)
+        self.y_heu_mat = np.matmul(heu_steps.reshape(self.heuristic_dist,1), \
+                                     y_laser.reshape(1,self.num_laser_scan)).astype(int)
 
         # initialize reward 
         self.reward_prev = 0
@@ -145,7 +150,7 @@ class AREEnv(gym.Env):
     '''
     def step(self, action):
         # scale action between -pi and pi
-        heading = action * math.pi
+        heading = utils.action_to_rad(action)
 
         # may have to change step_distance to laser scan distance        
         steps = self.world.get_path(heading, self.step_distance)
@@ -209,8 +214,10 @@ class AREEnv(gym.Env):
         term1[term2] = self.laser_scan_max_dist # rows without obstacles scan all the way
         ind_free = (np.arange(self.laser_scan_max_dist) < term1[:, np.newaxis]).transpose()
         ind_obs = (np.arange(self.laser_scan_max_dist) == term1[:, np.newaxis]).transpose()
+        ind_last_point = (np.arange(self.laser_scan_max_dist) == term1[:, np.newaxis]-1)
         self.global_map[x_global[ind_free], y_global[ind_free]] = 1
         self.global_map[x_global[ind_obs], y_global[ind_obs]] = 0
+        self.laserscan = np.sqrt(self.x_laser_mat**2 + self.y_laser_mat**2).transpose()[ind_last_point]
         np.vectorize(self.world.explore)(self.x_laser_mat[ind_free], self.y_laser_mat[ind_free])
         if self.save_map:
             np.vectorize(lambda x,y: self.scan.append([x,y]))(self.x_laser_mat[ind_free], \
@@ -236,45 +243,22 @@ class AREEnv(gym.Env):
         points_to_explore_x = x_global[ind_last_point]
         points_to_explore_y = y_global[ind_last_point]
 
-        x_global_explore = (self.x_laser_mat + points_to_explore_x[:, np.newaxis, np.newaxis]).clip(0,self.world_size*2-1)
-        y_global_explore = (self.y_laser_mat + points_to_explore_y[:, np.newaxis, np.newaxis]).clip(0,self.world_size*2-1)
+        x_global_explore = (self.x_heu_mat + points_to_explore_x[:, np.newaxis, np.newaxis]).clip(0,self.world_size*2-1)
+        y_global_explore = (self.y_heu_mat + points_to_explore_y[:, np.newaxis, np.newaxis]).clip(0,self.world_size*2-1)
         term_explore = self.global_map[x_global_explore, y_global_explore] == 0 # true if obstacle in global world
         term1_explore = np.argmax(term_explore, axis=1) # find first row that is true (first obstacle)
         term2_explore = np.all(term_explore == False, axis=1) # find rows without obstacles
-        term1_explore[term2_explore] = self.laser_scan_max_dist # rows without obstacles scan all the way
-        ind_free_explore = (np.arange(self.laser_scan_max_dist) < term1_explore[:,:, np.newaxis]).transpose(0,2,1)
+        term1_explore[term2_explore] = self.heuristic_dist # rows without obstacles scan all the way
+        ind_free_explore = (np.arange(self.heuristic_dist) < term1_explore[:,:, np.newaxis]).transpose(0,2,1)
         can_explore = self.global_map[x_global_explore,y_global_explore] == -1
         can_explore[ind_free_explore==False] = False
         heu = np.sum(can_explore, axis=(1,2))
         self.heuristic = heu/max(heu.max(),1)
         
     def get_reward(self):
-        '''
-        ███╗░░██╗░█████╗░   ░█████╗░██╗░░░░░██╗░░░██╗███████╗
-        ████╗░██║██╔══██╗   ██╔══██╗██║░░░░░██║░░░██║██╔════╝
-        ██╔██╗██║██║░░██║   ██║░░╚═╝██║░░░░░██║░░░██║█████╗░░
-        ██║╚████║██║░░██║   ██║░░██╗██║░░░░░██║░░░██║██╔══╝░░
-        ██║░╚███║╚█████╔╝   ╚█████╔╝███████╗╚██████╔╝███████╗
-        ╚═╝░░╚══╝░╚════╝░   ░╚════╝░╚══════╝░╚═════╝░╚══════╝
-        '''
         # Calculate the delta of exploration progress before and after the action
         delta_reward = self.reward_after - self.reward_prev
 
-        '''        
-        ██╗  ████████╗██╗░░██╗██╗███╗░░██╗██╗░░██╗  ██╗████████╗██╗░██████╗
-        ██║  ╚══██╔══╝██║░░██║██║████╗░██║██║░██╔╝  ██║╚══██╔══╝╚█║██╔════╝
-        ██║  ░░░██║░░░███████║██║██╔██╗██║█████═╝░  ██║░░░██║░░░░╚╝╚█████╗░
-        ██║  ░░░██║░░░██╔══██║██║██║╚████║██╔═██╗░  ██║░░░██║░░░░░░░╚═══██╗
-        ██║  ░░░██║░░░██║░░██║██║██║░╚███║██║░╚██╗  ██║░░░██║░░░░░░██████╔╝
-        ╚═╝  ░░░╚═╝░░░╚═╝░░╚═╝╚═╝╚═╝░░╚══╝╚═╝░░╚═╝  ╚═╝░░░╚═╝░░░░░░╚═════╝░
-
-        ██████╗░░█████╗░███╗░░██╗███████╗
-        ██╔══██╗██╔══██╗████╗░██║██╔════╝
-        ██║░░██║██║░░██║██╔██╗██║█████╗░░
-        ██║░░██║██║░░██║██║╚████║██╔══╝░░
-        ██████╔╝╚█████╔╝██║░╚███║███████╗
-        ╚═════╝░░╚════╝░╚═╝░░╚══╝╚══════╝
-        '''
         return delta_reward
 
     def finished(self):

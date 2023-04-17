@@ -239,20 +239,19 @@ class AREEnv(gym.Env):
         term1 = np.argmax(term, axis=0) # find first row that is true (first obstacle)
         term2 = np.all(term == False, axis=0) # find rows without obstacles
         term1[term2] = self.laser_scan_max_dist # rows without obstacles scan all the way
-        ind_last_point = (np.arange(self.laser_scan_max_dist) == term1[:, np.newaxis]-1).transpose()
-        points_to_explore_x = x_global[ind_last_point]
-        points_to_explore_y = y_global[ind_last_point]
+        ind_free = (np.arange(self.laser_scan_max_dist) < term1[:, np.newaxis]).transpose()
 
-        x_global_explore = (self.x_heu_mat + points_to_explore_x[:, np.newaxis, np.newaxis]).clip(0,self.world_size*2-1)
-        y_global_explore = (self.y_heu_mat + points_to_explore_y[:, np.newaxis, np.newaxis]).clip(0,self.world_size*2-1)
+        x_global_explore = (self.x_heu_mat + x_global[:, :, np.newaxis, np.newaxis]).clip(0,self.world_size*2-1)
+        y_global_explore = (self.y_heu_mat + y_global[:, :, np.newaxis, np.newaxis]).clip(0,self.world_size*2-1)
         term_explore = self.global_map[x_global_explore, y_global_explore] == 0 # true if obstacle in global world
-        term1_explore = np.argmax(term_explore, axis=1) # find first row that is true (first obstacle)
-        term2_explore = np.all(term_explore == False, axis=1) # find rows without obstacles
+        term1_explore = np.argmax(term_explore, axis=2) # find first row that is true (first obstacle)
+        term2_explore = np.all(term_explore == False, axis=2) # find rows without obstacles
         term1_explore[term2_explore] = self.heuristic_dist # rows without obstacles scan all the way
-        ind_free_explore = (np.arange(self.heuristic_dist) < term1_explore[:,:, np.newaxis]).transpose(0,2,1)
+        ind_free_explore = (np.arange(self.heuristic_dist) < term1_explore[:,:,:,np.newaxis]).transpose(0,1,3,2)
         can_explore = self.global_map[x_global_explore,y_global_explore] == -1
         can_explore[ind_free_explore==False] = False
-        heu = np.sum(can_explore, axis=(1,2))
+        can_explore[ind_free==False,:,:] = False
+        heu = np.sum(can_explore, axis=(0,2,3))
         self.heuristic = heu/max(heu.max(),1)
         
     def get_reward(self):

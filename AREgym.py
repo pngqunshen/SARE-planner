@@ -253,7 +253,8 @@ class AREEnv(gym.Env):
         can_explore = self.global_map[x_global_explore,y_global_explore] == -1
         can_explore[ind_free_explore==False] = False
         heu = np.sum(can_explore, axis=(1,2))
-        self.heuristic = heu/max(heu.max(),1)
+        self.heuristic[heu<heu.mean()] = 0
+        self.heuristic[heu>=heu.mean()] = 1
         
     def get_reward(self):
         # Calculate the delta of exploration progress before and after the action

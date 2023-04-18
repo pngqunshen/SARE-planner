@@ -28,8 +28,8 @@ def a_star(map, start, end):
             # update node
             if map[i, j] != 1:
                 node.obs = True
-                for no in node.neighbour:
-                    no.obs = True
+                # for no in node.neighbour:
+                #     no.obs = True
     q = MyHeap(key=lambda x:x.find_cost())
     nodes[start[0], start[1]].g = 0
     q.push(nodes[start[0], start[1]])

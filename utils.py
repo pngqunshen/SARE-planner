@@ -97,9 +97,10 @@ def bfs_new(map_, start):
         neigh_lst = neigh_func(curr[0], curr[1])
         for a,b in neigh_lst:
             if not out_of_bounds(a, b, map_.shape[0], map_.shape[1]):
+                if map_[a,b] == -1:
+                    return ((curr[0], curr[1]))
                 if map_[a,b] != 0 and (a,b) not in visited:
                     queue.append((a,b))
                     visited.add((a,b))
-                elif map_[a,b] == -1:
-                    return (a,b)
+                
     return None

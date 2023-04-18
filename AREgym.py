@@ -256,10 +256,15 @@ class AREEnv(gym.Env):
         can_explore[ind_free_explore==False] = False
         heu = np.sum(can_explore, axis=(1,2))
         if heu.sum() == 0:
+            # print(self.x, self.y)
+            # print(self.global_map[self.x, self.y])
             closest = utils.bfs_new(self.global_map, (self.x, self.y))
-            # path = astar.a_star(self.global_map, (self.x, self.y), closest)
+            # print(closest)
+            # print(self.global_map[closest[0], closest[1]])
+            path = astar.a_star(self.global_map, (self.x, self.y), closest)
             # print(path)
-            angle = np.arctan2(closest[0]-self.x, closest[1]-self.y)
+            # print()
+            angle = np.arctan2(path[0][0]-self.x, path[0][1]-self.y)
             direction = np.argmin(abs(self.laser_scan_heading - angle))
             heu[direction] = 1
         self.heuristic = heu/max(heu.max(),1)

@@ -4,6 +4,7 @@ import math
 import World
 import cv2
 import utils
+import astar
 '''
     Observations: 36 range values from lidar, 36 heuristics for laserscan value
     
@@ -46,7 +47,7 @@ class AREEnv(gym.Env):
         self.num_laser_scan = num_laser_scan
         self.laserscan = np.zeros(self.num_laser_scan)
         self.laser_scan_heading = \
-            np.array([(utils.action_to_rad(i / self.num_laser_scan)) \
+            np.array([(utils.index_to_rad(i / self.num_laser_scan)) \
                       for i in range(self.num_laser_scan)])
         
         # variables for laserscan
@@ -140,6 +141,7 @@ class AREEnv(gym.Env):
 
         if self.save_map:
             self.save_map_mode()
+        # self.initial_explore()
 
         return self.observe()
     
@@ -253,6 +255,13 @@ class AREEnv(gym.Env):
         can_explore = self.global_map[x_global_explore,y_global_explore] == -1
         can_explore[ind_free_explore==False] = False
         heu = np.sum(can_explore, axis=(1,2))
+        if heu.sum() == 0:
+            closest = utils.bfs_new(self.global_map, (self.x, self.y))
+            # path = astar.a_star(self.global_map, (self.x, self.y), closest)
+            # print(path)
+            angle = np.arctan2(closest[0]-self.x, closest[1]-self.y)
+            direction = np.argmin(abs(self.laser_scan_heading - angle))
+            heu[direction] = 1
         self.heuristic = heu/max(heu.max(),1)
         
     def get_reward(self):
@@ -306,3 +315,14 @@ class AREEnv(gym.Env):
         image3 = cv2.rotate(self.current_img, cv2.ROTATE_180)
         image3 = (image3 * 255).astype(np.uint8)
         cv2.imwrite(image_path + "/current_state.png", image3)
+
+    def initial_explore(self):
+        # update global map with world map within distance
+        distance  = np.random.randint(self.laser_scan_max_dist, 2 * self.laser_scan_max_dist)
+        x, y  = np.mgrid[-distance:distance+1, -distance:distance+1]
+        x_global = (x + self.x).clip(0,self.world_size*2-1)
+        y_global = (y + self.y).clip(0,self.world_size*2-1)
+        x_world = (x + self.world.x).clip(0,self.world.size-1)
+        y_world = (y + self.world.y).clip(0,self.world.size-1)
+
+        self.global_map[x_global, y_global] = self.world.world[x_world, y_world]

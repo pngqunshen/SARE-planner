@@ -5,6 +5,7 @@ import World
 import cv2
 import utils
 import astar
+import pyastar2d
 '''
     Observations: 36 range values from lidar, 36 heuristics for laserscan value
     
@@ -83,7 +84,7 @@ class AREEnv(gym.Env):
         self.max_steps = max_steps
         self.steps = 0
 
-        self.observation_space = gym.spaces.Box(low=0, high=self.laser_scan_max_dist, shape=(self.num_laser_scan * 2,))
+        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(self.num_laser_scan * 2,))
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(1,))
     
     def save_map_mode(self):
@@ -260,10 +261,12 @@ class AREEnv(gym.Env):
             closest = utils.bfs_new(self.global_map, (self.x, self.y))
             # print(closest)
             # print(self.global_map[closest[0], closest[1]])
-            path = astar.a_star(self.global_map, (self.x, self.y), closest)
+            map_ = np.nan_to_num(((self.global_map - 1) * -np.inf).astype(np.float32), nan=1, posinf=np.inf)
+            path = pyastar2d.astar_path(map_, (self.x, self.y), closest, allow_diagonal=True)
+            # path = astar.a_star(self.global_map, (self.x, self.y), closest)
             # print(path)
             # print()
-            angle = np.arctan2(path[0][0]-self.x, path[0][1]-self.y)
+            angle = np.arctan2( path[1][1]-self.y, path[1][0]-self.x)
             direction = np.argmin(abs(self.laser_scan_heading - angle))
             heu[direction] = 1
         self.heuristic = heu/max(heu.max(),1)

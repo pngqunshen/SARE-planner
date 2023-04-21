@@ -7,7 +7,7 @@ to setup conda environment, run the following commands
 
 `conda activate me5406-ARE`
 
-`pip install --user jupyter stable-baselines3[extra] pyastar2d`
+`pip install --user jupyter stable-baselines3[extra] pyastar2d tensorboard`
 
 ## Run
 The training and running code can be found in Runner.ipynb

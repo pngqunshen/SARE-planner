@@ -108,19 +108,11 @@ class AREEnv(gym.Env):
     
         # image of generated map, doesnt change 
         self.world_img = np.ones((self.world_size, self.world_size, 3))
-        for i in range(self.world_size):
-            for j in range(self.world_size):
-                self.world_img[i,j,0] = 0 if self.world.world[i,j] == 0 else 1
-                self.world_img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
-                self.world_img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
+        self.world_img[self.world.world == 0] = 0
 
         # shows world map with Robot and curent laserscan and path taken
-        self.current_img = np.zeros((self.world_size, self.world_size, 3))
-        for i in range(self.world_size):
-            for j in range(self.world_size):
-                self.current_img[i,j,0] = 0 if self.world.world[i,j] == 0 else 1
-                self.current_img[i,j,1] = 0 if self.world.world[i,j] == 0 else 1
-                self.current_img[i,j,2] = 0 if self.world.world[i,j] == 0 else 1
+        self.current_img = np.ones((self.world_size, self.world_size, 3))
+        self.current_img[self.world.world == 0] = 0
 
         # keeping track of stuff for rendering 
         self.scan = [] # store values scanned pixels for rendering
@@ -300,10 +292,16 @@ class AREEnv(gym.Env):
         image2 = (image2 * 255).astype(np.uint8)
         # cv2.imwrite(image_path + "/world_map.png", image2)
 
-        self.current_img[self.world.x, self.world.y, 2] = 0
+        glob_map_resized = self.global_map[self.x-self.world.x:self.x-self.world.x+self.world_size,
+                                           self.y-self.world.y:self.y-self.world.y+self.world_size]
+        map_img_resized = self.map_img[self.x-self.world.x:self.x-self.world.x+self.world_size,
+                                       self.y-self.world.y:self.y-self.world.y+self.world_size]
+        self.current_img[glob_map_resized == 1] = np.array([0,1,0])
         for i in range(len(self.scan)):
             self.current_img[self.world.x + self.scan[i][0], \
-                             self.world.y + self.scan[i][1], 1] = 0
+                             self.world.y + self.scan[i][1]] = np.array([1,0,1])
+        self.current_img[self.world.x, self.world.y] = np.array([0,0,1])
+        self.current_img[np.all(map_img_resized == np.array([1 ,0, 0]), axis=2)] = np.array([1,0,0])
         image3 = cv2.rotate(self.current_img, cv2.ROTATE_180)
         image3 = (image3 * 255).astype(np.uint8)
         # cv2.imwrite(image_path + "/current_state.png", image3)

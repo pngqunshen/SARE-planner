@@ -4,7 +4,6 @@ import math
 import World
 import cv2
 import utils
-import astar
 import pyastar2d
 '''
     Observations: 36 range values from lidar, 36 heuristics for laserscan value

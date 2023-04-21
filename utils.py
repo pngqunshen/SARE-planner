@@ -65,24 +65,6 @@ Euclidean distance
 def euc_dist(x0, x1, y0, y1):
     return math.sqrt((x0-x1)**2+(y0-y1)**2)
 
-def bfs(map_, start):
-    neigh_func = lambda x,y: [
-        (x-1,y-1), (x-1,y  ),(x-1,y+1),
-        (x  ,y-1),           (x  ,y+1),
-        (x+1,y-1), (x+1,y  ),(x+1,y+1)
-        ]
-    visited = set()
-    queue = [(start[0], start[1])]
-    while len(queue) != 0:
-        curr = queue.pop(0)
-        neigh_lst = neigh_func(curr[0], curr[1])
-        for a,b in neigh_lst:
-            if not out_of_bounds(a, b, map_.shape[0], map_.shape[1]):
-                if map_[a,b] != 0 and (a,b) not in visited:
-                    queue.append((a,b))
-                elif map_[a,b] == -1:
-                    return (a,b)
-            visited.add((a,b))
 
 def bfs_new(map_, start):
     neigh_func = lambda x,y: [

@@ -288,32 +288,17 @@ class AREEnv(gym.Env):
         if not self.save_map:
             return
         
-        for i in range(self.world_size * 2):
-            for j in range(self.world_size * 2):
-                if (self.map_img[i,j] == np.array([1 ,0, 0])).all():
-                    continue
-                self.map_img[i,j,0] = 0 \
-                    if self.global_map[i,j] == 0 \
-                    else 1 \
-                        if self.global_map[i,j] == 1 \
-                        else 0.5
-                self.map_img[i,j,1] = 0 \
-                    if self.global_map[i,j] == 0 \
-                    else 1 \
-                        if self.global_map[i,j] == 1 \
-                        else 0.5
-                self.map_img[i,j,2] = 0 \
-                    if self.global_map[i,j] == 0 \
-                    else 1 \
-                        if self.global_map[i,j] == 1 \
-                        else 0.5
-        image1 = cv2.rotate(self.map_img, cv2.ROTATE_180)
+        global_map_img = np.ones(self.map_img.shape) * 0.5
+        global_map_img[self.global_map == 0] = np.array([0,0,0])
+        global_map_img[self.global_map == 1] = np.array([1,1,1])
+        global_map_img[np.all(self.map_img == np.array([1 ,0, 0]), axis=2)] = np.array([1,0,0])
+        image1 = cv2.rotate(global_map_img, cv2.ROTATE_180)
         image1 = (image1 * 255).astype(np.uint8)
-        cv2.imwrite(image_path + "/global_map.png", image1)
+        # cv2.imwrite(image_path + "/global_map.png", image1)
 
         image2 = cv2.rotate(self.world_img, cv2.ROTATE_180)
         image2 = (image2 * 255).astype(np.uint8)
-        cv2.imwrite(image_path + "/world_map.png", image2)
+        # cv2.imwrite(image_path + "/world_map.png", image2)
 
         self.current_img[self.world.x, self.world.y, 2] = 0
         for i in range(len(self.scan)):
@@ -321,7 +306,8 @@ class AREEnv(gym.Env):
                              self.world.y + self.scan[i][1], 1] = 0
         image3 = cv2.rotate(self.current_img, cv2.ROTATE_180)
         image3 = (image3 * 255).astype(np.uint8)
-        cv2.imwrite(image_path + "/current_state.png", image3)
+        # cv2.imwrite(image_path + "/current_state.png", image3)
+        return image1, image2, image3
 
     def initial_explore(self):
         # update global map with world map within distance

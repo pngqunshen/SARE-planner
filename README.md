@@ -1,5 +1,10 @@
 # Simplified Autonomous Robot Exploration
 
+This project attempts to develop an efficient exploration strategy for a robot placed in an unknown environment using reinforcement learning techniques. The Proximal Policy Optimization (PPO) algorithm implemented in the Stable Baselines3 library is used to train an exploration policy. A custom environment in the OpenAI Gym framework that simulated the robot's movement and sensing capabilities. The environment was designed to simulate an unknown 2D space that the robot needed to explore to maximize its reward.
+
+![demo](current_state.gif)
+![demo](global_map.gif)
+
 ## Installation
 To setup conda environment, run the following commands
 
